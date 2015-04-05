@@ -19,7 +19,8 @@
 #
 
 import unittest
-from nfa import NFA, Epsilon
+
+from nfa import NFA, Epsilon, NFAException
 
 
 class TestSimpleDFA(unittest.TestCase):
@@ -30,16 +31,16 @@ class TestSimpleDFA(unittest.TestCase):
         self.assertFalse(self.fa.no_of_states, 'States not empty at start')
 
     def test_add_state(self):
-        'Newly created state should not have any transitions'
+        """Newly created state should not have any transitions"""
         sid = self.fa.new_state()
-        for s, p in self.fa.edges(sid).items():
+        for s, p in self.fa.get_edges(sid).items():
             self.assertFalse(p, 'Found edge ({}, {}) in newly added state {}'.format(s, p, sid))
 
     def test_edge(self):
         fa = self.fa
         sid = fa.new_state()
-        fa.add_transition(sid, '0', sid)
-        edges = fa.edges(sid)
+        fa.new_edge(sid, '0', sid)
+        edges = fa.get_edges(sid)
         q = edges['0']
         self.assertTrue(sid in q, 'Expected edge not found in {} for state {}'.format(q, sid))
         self.assertTrue(q - {sid} == set(), 'Unexpected edges found in {} for state {}'.format(q, sid))
@@ -59,7 +60,7 @@ class TestSimpleDFA(unittest.TestCase):
         self.assertFalse(fa.has_edge(s2, s1), 'Should not have an edge s2->s1')
         self.assertFalse(fa.has_edge(s2, s0), 'Should not have an edge s2->s0')
 
-        fa.add_transition(s0, '0', s1)
+        fa.new_edge(s0, '0', s1)
         self.assertFalse(fa.has_edge(s0, s0), 'Should not have an edge s0->s0')
         self.assertTrue(fa.has_edge(s0, s1), 'Should have an edge s0->s1')
         self.assertFalse(fa.has_edge(s0, s2), 'Should not have an edge s0->s2')
@@ -69,7 +70,7 @@ class TestSimpleDFA(unittest.TestCase):
         self.assertFalse(fa.has_edge(s2, s2), 'Should not have an edge s2->s2')
         self.assertFalse(fa.has_edge(s2, s1), 'Should not have an edge s2->s1')
         self.assertFalse(fa.has_edge(s2, s0), 'Should not have an edge s2->s0')
-        fa.add_transition(s0, '1', s2)
+        fa.new_edge(s0, '1', s2)
         self.assertFalse(fa.has_edge(s0, s0), 'Should not have an edge s0->s0')
         self.assertTrue(fa.has_edge(s0, s1), 'Should have an edge s0->s1')
         self.assertTrue(fa.has_edge(s0, s2), 'Should have an edge s0->s2')
@@ -79,7 +80,7 @@ class TestSimpleDFA(unittest.TestCase):
         self.assertFalse(fa.has_edge(s2, s2), 'Should not have an edge s2->s2')
         self.assertFalse(fa.has_edge(s2, s1), 'Should not have an edge s2->s1')
         self.assertFalse(fa.has_edge(s2, s0), 'Should not have an edge s2->s0')
-        fa.add_transition(s0, '1', s0)
+        fa.new_edge(s0, '1', s0)
         self.assertTrue(fa.has_edge(s0, s0), 'Should have an edge s0->s0')
         self.assertTrue(fa.has_edge(s0, s1), 'Should have an edge s0->s1')
         self.assertTrue(fa.has_edge(s0, s2), 'Should have an edge s0->s2')
@@ -89,10 +90,10 @@ class TestSimpleDFA(unittest.TestCase):
         self.assertFalse(fa.has_edge(s2, s2), 'Should not have an edge s2->s2')
         self.assertFalse(fa.has_edge(s2, s1), 'Should not have an edge s2->s1')
         self.assertFalse(fa.has_edge(s2, s0), 'Should not have an edge s2->s0')
-        fa.add_transition(s1, '0', s1)
-        fa.add_transition(s1, '1', s0)
-        fa.add_transition(s1, '1', s2)
-        fa.add_transition(s2, '0', s0)
+        fa.new_edge(s1, '0', s1)
+        fa.new_edge(s1, '1', s0)
+        fa.new_edge(s1, '1', s2)
+        fa.new_edge(s2, '0', s0)
         self.assertTrue(fa.has_edge(s0, s0), 'Should have an edge s0->s0')
         self.assertTrue(fa.has_edge(s0, s1), 'Should have an edge s0->s1')
         self.assertTrue(fa.has_edge(s0, s2), 'Should have an edge s0->s2')
@@ -104,21 +105,22 @@ class TestSimpleDFA(unittest.TestCase):
         self.assertTrue(fa.has_edge(s2, s0), 'Should have an edge s2->s0')
 
     def test_del_state(self):
+        """Deleting a state should remove all edges to that state"""
         fa = self.fa
         s0 = fa.new_state()
         s1 = fa.new_state()
         s2 = fa.new_state()
-        fa.add_transition(s0, '0', s1)
-        fa.add_transition(s0, '1', s0)
-        fa.add_transition(s0, '1', s2)
-        fa.add_transition(s1, '0', s1)
-        fa.add_transition(s1, '1', s0)
-        fa.add_transition(s1, '1', s2)
-        fa.add_transition(s2, '0', s0)
+        fa.new_edge(s0, '0', s1)
+        fa.new_edge(s0, '1', s0)
+        fa.new_edge(s0, '1', s2)
+        fa.new_edge(s1, '0', s1)
+        fa.new_edge(s1, '1', s0)
+        fa.new_edge(s1, '1', s2)
+        fa.new_edge(s2, '0', s0)
 
         fa.del_state(s0)
         self.assertEqual(fa.no_of_states, 2, 'Wrong number of states after delete ({})'.format(fa.no_of_states))
-        edges = fa.edges(s1)
+        edges = fa.get_edges(s1)
         self.assertFalse(s0 in [q for q in edges.values()], 'State {} remains a destination after delete')
         self.assertTrue(fa.has_edge_on_symbol(s1, '1', s2), 'Transition s1->s2 over 1 was deleted')
         self.assertFalse(fa.has_edge_on_symbol(s2, '0', s0), 'Transition s2->s0 over 1 not removed by delete')
@@ -128,10 +130,10 @@ class TestSimpleDFA(unittest.TestCase):
         s0 = fa.new_state(initial=True, final=True)
         s1 = fa.new_state()
 
-        fa.add_transition(s0, '0', s0)
-        fa.add_transition(s0, '1', s1)
-        fa.add_transition(s1, '0', s1)
-        fa.add_transition(s1, '1', s0)
+        fa.new_edge(s0, '0', s0)
+        fa.new_edge(s0, '1', s1)
+        fa.new_edge(s1, '0', s1)
+        fa.new_edge(s1, '1', s0)
 
         vectors = {
             'accepting': [
@@ -160,10 +162,10 @@ class TestSimpleDFA(unittest.TestCase):
         }
 
         for v in vectors['accepting']:
-            self.assertTrue(fa.process(v), 'String "{}" was not accepted as it should'.format(v))
+            self.assertTrue(fa.test_input(v), 'String "{}" was not accepted as it should'.format(v))
 
         for v in vectors['rejecting']:
-            self.assertFalse(fa.process(v), 'String "{}" was not rejected as it should'.format(v))
+            self.assertFalse(fa.test_input(v), 'String "{}" was not rejected as it should'.format(v))
 
 
 class TestAlphanumericDFA(unittest.TestCase):
@@ -181,11 +183,11 @@ class TestAlphanumericDFA(unittest.TestCase):
         sC = fa.new_state()
         sD = fa.new_state(final=True)
 
-        fa.add_transition(s0, 'A', sA)
-        fa.add_multiple_transitions(sA, {'A': sA, 'B': sB, 'C': sC, 'D': sD})
-        fa.add_multiple_transitions(sB, {'B': sB, 'C': sC, 'D': sD})
-        fa.add_multiple_transitions(sC, {'C': sC, 'D': sD})
-        fa.add_transition(sD, 'D', sD)
+        fa.new_edge(s0, 'A', sA)
+        fa.add_multiple_edges(sA, {'A': sA, 'B': sB, 'C': sC, 'D': sD})
+        fa.add_multiple_edges(sB, {'B': sB, 'C': sC, 'D': sD})
+        fa.add_multiple_edges(sC, {'C': sC, 'D': sD})
+        fa.new_edge(sD, 'D', sD)
 
         vectors = {
             'accepting': [
@@ -202,10 +204,16 @@ class TestAlphanumericDFA(unittest.TestCase):
         }
 
         for v in vectors['accepting']:
-            self.assertTrue(fa.process(v), 'String "{}" was not accepted as it should'.format(v))
+            self.assertTrue(fa.test_input(v), 'String "{}" was not accepted as it should'.format(v))
 
         for v in vectors['rejecting']:
-            self.assertFalse(fa.process(v), 'String "{}" was not rejected as it should'.format(v))
+            self.assertFalse(fa.test_input(v), 'String "{}" was not rejected as it should'.format(v))
+
+    def testInvalidSymbol(self):
+        fa = self.fa
+        s0 = fa.new_state(initial=True)
+
+        self.assertRaises(NFAException, fa.test_input, '*#*')
 
 
 class TestAlphaNumericNFA(unittest.TestCase):
@@ -234,12 +242,12 @@ class TestAlphaNumericNFA(unittest.TestCase):
         sSign = fa.new_state()
         sDigit = fa.new_state(final=True)
 
-        fa.add_transition(sInit, '+', sSign)
-        fa.add_transition(sInit, '-', sSign)
-        fa.add_transition(sInit, Epsilon, sSign)
+        fa.new_edge(sInit, '+', sSign)
+        fa.new_edge(sInit, '-', sSign)
+        fa.new_edge(sInit, Epsilon, sSign)
         for s in '0123456789':
-            fa.add_transition(sSign, s, sDigit)
-            fa.add_transition(sDigit, s, sDigit)
+            fa.new_edge(sSign, s, sDigit)
+            fa.new_edge(sDigit, s, sDigit)
 
         vectors = {
             'accepting': [
@@ -258,10 +266,10 @@ class TestAlphaNumericNFA(unittest.TestCase):
         }
 
         for v in vectors['accepting']:
-            self.assertTrue(fa.process(v), 'String "{}" was not accepted as it should'.format(v))
+            self.assertTrue(fa.test_input(v), 'String "{}" was not accepted as it should'.format(v))
 
         for v in vectors['rejecting']:
-            self.assertFalse(fa.process(v), 'String "{}" was not rejected as it should'.format(v))
+            self.assertFalse(fa.test_input(v), 'String "{}" was not rejected as it should'.format(v))
 
 
 

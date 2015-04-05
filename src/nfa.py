@@ -24,6 +24,14 @@ class Epsilon:
     pass
 
 
+class NFAException(Exception):
+    pass
+
+
+class NFAInvalidInput(NFAException):
+    pass
+
+
 class NFA(object):
 
     def __init__(self, alphabet):
@@ -85,25 +93,28 @@ class NFA(object):
 
     def delta(self, state, symbol):
         """
-        Determine next state given current state
+        Determine next set of states given current state
         and input symbol.
 
         Passing a symbol that is not part of the defined alphabet
-        will not yield a next state.
+        throws NFAInvalidInput.
         """
         try:
             return self._states[state][symbol]
         except KeyError:
-            return set()
+            if symbol not in self._alphabet:
+                raise NFAInvalidInput("symbol {} not in the defined alphabet".format(symbol))
+            else:
+                raise
 
-    def add_transition(self, p, s, q):
+    def new_edge(self, p, s, q):
         """Add new edge from state p to q on symbol s"""
         self._states[p][s].add(q)
 
-    def add_multiple_transitions(self, p, state_map):
+    def add_multiple_edges(self, p, state_map):
         """Add multiple state transitions from state p
 
-        trans_map is a dict like:
+        state_map is a dict like:
            { sym: state, ...}
 
            Add one edge for each input symbol sym to its mapped state
@@ -128,22 +139,30 @@ class NFA(object):
                 return True
         return False
 
-    def edges(self, p):
+    def get_edges(self, p):
         """
-        edges(p)
-
         Get a dict mapping all edges from state q
-        of format {symbol: set(states)}
+        of format {symbol: set(states), ...}
         """
         return {s: q for s, q in self._states[p].items()}
 
-    def process(self, input):
-        """Run NFA on an input string of symbols until accepting or rejecting"""
+    def test_input(self, input_sequence):
+        """
+        Run NFA on an input sequence of symbols and return
+        True if the whole sequence is consumed and the NFA is in
+        at least one final state
+
+        :param input_sequence: Iterable of input symbols from the defined alphabet
+        :returns: True if the NFA accepts input, False if not
+        """
+        if self._initial is None:
+            raise NFAException("NFA has no initial state")
+
         current_states = {self._initial}
         for p in list(current_states):
             current_states |= self.delta(p, Epsilon)
 
-        for sym in input:
+        for sym in input_sequence:
             next_states = set()
             for p in current_states:
                 next_states |= self.delta(p, Epsilon)
@@ -152,5 +171,8 @@ class NFA(object):
             for p in list(next_states):
                 next_states |= self.delta(p, Epsilon)
             current_states = next_states
+
+            if not current_states:
+                return False
 
         return True if current_states & self._finals else False
