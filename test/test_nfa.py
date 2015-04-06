@@ -33,14 +33,14 @@ class TestSimpleDFA(unittest.TestCase):
     def test_add_state(self):
         """Newly created state should not have any transitions"""
         sid = self.fa.new_state()
-        for s, p in self.fa.get_edges(sid).items():
+        for s, p in self.fa.get_edges_from_state(sid).items():
             self.assertFalse(p, 'Found edge ({}, {}) in newly added state {}'.format(s, p, sid))
 
     def test_edge(self):
         fa = self.fa
         sid = fa.new_state()
         fa.new_edge(sid, '0', sid)
-        edges = fa.get_edges(sid)
+        edges = fa.get_edges_from_state(sid)
         q = edges['0']
         self.assertTrue(sid in q, 'Expected edge not found in {} for state {}'.format(q, sid))
         self.assertTrue(q - {sid} == set(), 'Unexpected edges found in {} for state {}'.format(q, sid))
@@ -120,7 +120,7 @@ class TestSimpleDFA(unittest.TestCase):
 
         fa.del_state(s0)
         self.assertEqual(fa.no_of_states, 2, 'Wrong number of states after delete ({})'.format(fa.no_of_states))
-        edges = fa.get_edges(s1)
+        edges = fa.get_edges_from_state(s1)
         self.assertFalse(s0 in [q for q in edges.values()], 'State {} remains a destination after delete')
         self.assertTrue(fa.has_edge_on_symbol(s1, '1', s2), 'Transition s1->s2 over 1 was deleted')
         self.assertFalse(fa.has_edge_on_symbol(s2, '0', s0), 'Transition s2->s0 over 1 not removed by delete')
@@ -157,7 +157,6 @@ class TestSimpleDFA(unittest.TestCase):
                 '111',
                 '11111',
                 '1111111',
-                'abc'
             ]
         }
 
@@ -272,6 +271,48 @@ class TestAlphaNumericNFA(unittest.TestCase):
             self.assertFalse(fa.test_input(v), 'String "{}" was not rejected as it should'.format(v))
 
 
+class TestConcat(unittest.TestCase):
+    def testConcatenation(self):
+        """
+        Define one NFA a that accept all strings in the regular language '00*1'
+        Define a second NFA accepting all string in the regular language '11*0'
+
+        Concatenate the two NFAs and test that it accepts only string of the regular
+        language '00*111*0'
+        :return:
+        """
+        fa = NFA('01')
+        sa0 = fa.new_state(initial=True, name='sa0')
+        sa1 = fa.new_state(name='sa1')
+        sa2 = fa.new_state(final=True, name='sa2')
+
+        fa.new_edge(sa0, '0', sa1)
+        fa.new_edge(sa1, '0', sa1)
+        fa.new_edge(sa1, '1', sa2)
+
+        self.assertTrue(fa.test_input('01'), 'String "01" not accepted')
+        self.assertFalse(fa.test_input('00'), 'String "00" not rejected')
+
+        fb = NFA('01')
+        sb0 = fb.new_state(initial=True, name='sb0')
+        sb1 = fb.new_state(name='sb1')
+        sb2 = fb.new_state(final=True, name='sb2')
+
+        fb.new_edge(sb0, '1', sb1)
+        fb.new_edge(sb1, '1', sb1)
+        fb.new_edge(sb1, '0', sb2)
+
+        self.assertTrue(fb.test_input('10'), 'String "10" not accepted')
+        self.assertFalse(fb.test_input('11'), 'String "11" not rejected')
+
+        fc = fa.concatenate(fb)
+
+        self.assertTrue(fc.test_input('0110'), 'String "0110" was not accepted')
+        self.assertTrue(fc.test_input('01110'), 'String "01110" was not accepted')
+        self.assertFalse(fc.test_input('0010'), 'String "0010" not rejected')
+        self.assertFalse(fc.test_input('0100'), 'String "0100" not rejected')
+        self.assertFalse(fc.test_input('0111'), 'String "0111" not rejected')
+        self.assertFalse(fc.test_input('1111'), 'String "1111" not rejected')
 
 if __name__ == '__main__':
     unittest.main()

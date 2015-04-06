@@ -108,8 +108,26 @@ class NFA(object):
                 raise
 
     def new_edge(self, p, s, q):
-        """Add new edge from state p to q on symbol s"""
+        """
+        Add edge from state p to state q on symbol s
+
+        :param p: Edge source state id
+        :param s: Input symbol for this edge
+        :param q: Edge destination state id
+        :return: None
+        """
         self._states[p][s].add(q)
+
+    def new_edge_set(self, p, s, states):
+        """
+        Add edges from state p over symbol s to a set of states
+
+        :param p: Edge source state id
+        :param s: Input symbol for this edge
+        :param states: Set of edge destination state ids
+        :return: None
+        """
+        self._states[p][s] |= states
 
     def add_multiple_edges(self, p, state_map):
         """Add multiple state transitions from state p
@@ -139,12 +157,51 @@ class NFA(object):
                 return True
         return False
 
-    def get_edges(self, p):
+    def get_states(self):
+        """
+        Get a dict of state ids and names in this NFA
+        """
+        return {p: self._state_names[p] for p in self._states}
+
+    def get_initial(self):
+        """
+        Get initial state id
+
+        :return: State id of the initial state or None if no initial state exists
+        """
+        return self._initial
+
+    def get_finals(self):
+        """
+        Get a list of all final states
+
+        :return: List all accepting state ids
+        """
+        return [p for p in self._finals]
+
+    def get_edges_from_state(self, p):
         """
         Get a dict mapping all edges from state q
         of format {symbol: set(states), ...}
         """
         return {s: q for s, q in self._states[p].items()}
+
+    def get_edges_on_symbol(self, s):
+        """
+        Get a dict mapping all edges from state over symbol s
+        of format {from_state: to_state, ...}
+        """
+        edges = {}
+        for p, states in self._states.items():
+            try:
+                edges[p] = set([q for q in states[s]])
+            except KeyError:
+                if s not in self._alphabet:
+                    raise NFAInvalidInput("symbol {} not in the defined alphabet".format(s))
+                else:
+                    raise
+
+        return edges
 
     def test_input(self, input_sequence):
         """
@@ -159,8 +216,12 @@ class NFA(object):
             raise NFAException("NFA has no initial state")
 
         current_states = {self._initial}
-        for p in list(current_states):
-            current_states |= self.delta(p, Epsilon)
+
+        processed = set()
+        while processed ^ current_states:
+            for p in list(processed ^ current_states):
+                current_states |= self.delta(p, Epsilon)
+                processed.add(p)
 
         for sym in input_sequence:
             next_states = set()
@@ -168,11 +229,73 @@ class NFA(object):
                 next_states |= self.delta(p, Epsilon)
                 next_states |= self.delta(p, sym)
 
-            for p in list(next_states):
-                next_states |= self.delta(p, Epsilon)
+            processed = set()
+            while processed ^ next_states:
+                for p in list(processed ^ next_states):
+                    next_states |= self.delta(p, Epsilon)
+                    processed.add(p)
             current_states = next_states
 
             if not current_states:
                 return False
 
         return True if current_states & self._finals else False
+
+    def concatenate(self, other):
+        """
+        Concatenate two NFAs
+        A new NFA is returned with the concatenated NFAs, leaving both input NFAs unchanged
+
+        :param other: Other NFA to be concatenated after this one
+        :return: Concatenated new NFA
+        """
+        concat = NFA(self._alphabet)
+
+        sid_self_to_new = {}
+        sid_new_to_self = {}
+        sid_other_to_new = {}
+        sid_new_to_other = {}
+        # Add all states from this NFA to it
+        for p, name in self.get_states().items():
+            sid = concat.new_state(name=name)
+            sid_self_to_new[p] = sid
+            sid_new_to_self[sid] = p
+
+        # Add all states from other NFA
+        for p, name in other.get_states().items():
+            sid = concat.new_state(name=name)
+            sid_other_to_new[p] = sid
+            sid_new_to_other[sid] = p
+
+        # Add all transitions from this NFA
+        for p in self.get_states():
+            for s, states in self.get_edges_from_state(p).items():
+                concat.new_edge_set(sid_self_to_new[p], s, set([sid_self_to_new[q] for q in states]))
+
+        # Add all transitions from other NFA
+        for p in other.get_states():
+            for s, states in other.get_edges_from_state(p).items():
+                concat.new_edge_set(sid_other_to_new[p], s, set([sid_other_to_new[q] for q in states]))
+
+        # Add new initial and final states
+        s_new_init = concat.new_state(initial=True)
+        s_new_exit = concat.new_state(final=True)
+
+        # Add the interconnecting state
+        s_new_connect = concat.new_state()
+
+        # Add Epsilon transitions from new init state to init state of self NFA
+        concat.new_edge(s_new_init, Epsilon, sid_self_to_new[self._initial])
+
+        # Add Epsilon transition from all final states in self NFA to new connect state
+        for p in self.get_finals():
+            concat.new_edge(sid_self_to_new[p], Epsilon, s_new_connect)
+
+        # Add Epsilon transition from new connect state to other initial state
+        concat.new_edge(s_new_connect, Epsilon, sid_other_to_new[other.get_initial()])
+
+        # Add Epsilon transition from all final states in other NFA to new final state
+        for p in other.get_finals():
+            concat.new_edge(sid_other_to_new[p], Epsilon, s_new_exit)
+
+        return concat
