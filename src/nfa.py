@@ -67,6 +67,37 @@ class NFA(object):
 
         return sid
 
+    def set_initial_state(self, sid):
+        """
+        Set start state of the NFA. If an initial state already is assigned
+        it will be replaced by the state id used in this call.
+
+        :param sid: New initial state id
+        :return: Previous initial state id, or None
+        """
+        prev = self._initial
+        self._initial = sid
+
+        return prev
+
+    def set_as_final_state(self, sid):
+        """
+        Add state sid as an accepting final state
+
+        :param sid: State id to be added to final state set
+        :return: None
+        """
+        self._finals.add(sid)
+
+    def remove_final_state(self, sid):
+        """
+        Remove state sid from final state set
+
+        :param sid: State id to be removed from finals
+        :return: None
+        """
+        self._finals.remove(sid)
+
     def del_state(self, sid):
         """
         Delete a state from the NFA.
@@ -251,51 +282,42 @@ class NFA(object):
         """
         concat = NFA(self._alphabet)
 
-        sid_self_to_new = {}
-        sid_new_to_self = {}
-        sid_other_to_new = {}
-        sid_new_to_other = {}
-        # Add all states from this NFA to it
+        sid_first_to_new = {}
+        sid_new_to_first = {}
+        sid_second_to_new = {}
+        sid_new_to_second = {}
+
+        # Add all states from first NFA to new NFA
         for p, name in self.get_states().items():
             sid = concat.new_state(name=name)
-            sid_self_to_new[p] = sid
-            sid_new_to_self[sid] = p
+            sid_first_to_new[p] = sid
+            sid_new_to_first[sid] = p
 
-        # Add all states from other NFA
+        # Add all states from second NFA
         for p, name in other.get_states().items():
             sid = concat.new_state(name=name)
-            sid_other_to_new[p] = sid
-            sid_new_to_other[sid] = p
+            sid_second_to_new[p] = sid
+            sid_new_to_second[sid] = p
 
-        # Add all transitions from this NFA
+        # Add all transitions from first NFA
         for p in self.get_states():
             for s, states in self.get_edges_from_state(p).items():
-                concat.new_edge_set(sid_self_to_new[p], s, set([sid_self_to_new[q] for q in states]))
+                concat.new_edge_set(sid_first_to_new[p], s, set([sid_first_to_new[q] for q in states]))
 
-        # Add all transitions from other NFA
+        # Add all transitions from second NFA
         for p in other.get_states():
             for s, states in other.get_edges_from_state(p).items():
-                concat.new_edge_set(sid_other_to_new[p], s, set([sid_other_to_new[q] for q in states]))
+                concat.new_edge_set(sid_second_to_new[p], s, set([sid_second_to_new[q] for q in states]))
 
-        # Add new initial and final states
-        s_new_init = concat.new_state(initial=True)
-        s_new_exit = concat.new_state(final=True)
+        # Set first NFA start state as new start state
+        concat.set_initial_state(sid_first_to_new[self._initial])
 
-        # Add the interconnecting state
-        s_new_connect = concat.new_state()
-
-        # Add Epsilon transitions from new init state to init state of self NFA
-        concat.new_edge(s_new_init, Epsilon, sid_self_to_new[self._initial])
-
-        # Add Epsilon transition from all final states in self NFA to new connect state
+        # Connect all final states in first NFA to start state of second NFA
         for p in self.get_finals():
-            concat.new_edge(sid_self_to_new[p], Epsilon, s_new_connect)
+            concat.new_edge(sid_first_to_new[p], Epsilon, sid_second_to_new[other.get_initial()])
 
-        # Add Epsilon transition from new connect state to other initial state
-        concat.new_edge(s_new_connect, Epsilon, sid_other_to_new[other.get_initial()])
-
-        # Add Epsilon transition from all final states in other NFA to new final state
+        # Set all final states from second NFA as finals in new NFA
         for p in other.get_finals():
-            concat.new_edge(sid_other_to_new[p], Epsilon, s_new_exit)
+            concat.set_as_final_state(sid_second_to_new[p])
 
         return concat
