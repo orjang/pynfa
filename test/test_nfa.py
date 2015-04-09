@@ -314,5 +314,38 @@ class TestConcat(unittest.TestCase):
         self.assertFalse(fc.test_input('0111'), 'String "0111" not rejected')
         self.assertFalse(fc.test_input('1111'), 'String "1111" not rejected')
 
+
+class TestClosure(unittest.TestCase):
+    def testClosure(self):
+        nfa = NFA('01')
+
+        s0 = nfa.new_state(initial=True)
+        s1 = nfa.new_state()
+        s2 = nfa.new_state()
+        s3 = nfa.new_state(final=True)
+        s4 = nfa.new_state()
+
+        nfa.new_edge(s0, '0', s1)
+        nfa.new_edge(s0, Epsilon, s2)
+        nfa.new_edge(s1, '0', s3)
+        nfa.new_edge(s1, Epsilon, s4)
+        nfa.new_edge(s2, '1', s2)
+        nfa.new_edge(s2, Epsilon, s3)
+
+        closure = nfa.closure(s0)
+        self.assertIn(s0, closure, "Closure start state s0 should be in closure")
+        self.assertNotIn(s1, closure, "State s1 should not be in closure")
+        self.assertIn(s2, closure, "State s2 not in closure")
+        self.assertIn(s3, closure, "State s3 not in closure")
+        self.assertNotIn(s4, closure, "State s4 should not be in closure")
+
+    def testEmptyClosure(self):
+        nfa = NFA('01')
+
+        s0 = nfa.new_state(initial=True)
+
+        closure = nfa.closure(s0)
+        self.assertIn(s0, closure, "Closure start state should be in closure")
+
 if __name__ == '__main__':
     unittest.main()

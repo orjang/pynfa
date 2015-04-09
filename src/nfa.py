@@ -321,3 +321,21 @@ class NFA(object):
             concat.set_as_final_state(sid_second_to_new[p])
 
         return concat
+
+    def closure(self, p):
+        """
+        Epsilon closure for a state
+
+        Return the set of states reachable from state p without
+        consuming any input symbols, ie, using only epsilon transitions
+
+        :param p: State id to get closure of
+        :return: Set of states that is the closure of p
+        """
+        closure_states = {p}
+        processed = set()
+        while closure_states ^ processed:
+            for p in list(closure_states ^ processed):
+                closure_states |= self.get_edges_from_state(p)[Epsilon]
+                processed.add(p)
+        return closure_states
