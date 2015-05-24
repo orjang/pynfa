@@ -271,15 +271,11 @@ class TestAlphaNumericNFA(unittest.TestCase):
             self.assertFalse(fa.test_input(v), 'String "{}" was not rejected as it should'.format(v))
 
 
-class TestConcat(unittest.TestCase):
-    def testConcatenation(self):
+class TestCombinations(unittest.TestCase):
+    def setUp(self):
         """
         Define one NFA a that accept all strings in the regular language '00*1'
         Define a second NFA accepting all string in the regular language '11*0'
-
-        Concatenate the two NFAs and test that it accepts only string of the regular
-        language '00*111*0'
-        :return:
         """
         fa = NFA('01')
         sa0 = fa.new_state(initial=True, name='sa0')
@@ -305,7 +301,22 @@ class TestConcat(unittest.TestCase):
         self.assertTrue(fb.test_input('10'), 'String "10" not accepted')
         self.assertFalse(fb.test_input('11'), 'String "11" not rejected')
 
-        fc = fa.concatenate(fb)
+        self.nfa1 = fa
+        self.nfa2 = fb
+
+    def testConcatenation(self):
+        """
+        Define one NFA a that accept all strings in the regular language '00*1'
+        Define a second NFA accepting all string in the regular language '11*0'
+
+        Concatenate the two NFAs and test that it accepts only string of the regular
+        language '00*111*0'
+        :return:
+        """
+        fa = self.nfa1
+        fb = self.nfa2
+
+        fc = fa | fb
 
         self.assertTrue(fc.test_input('0110'), 'String "0110" was not accepted')
         self.assertTrue(fc.test_input('01110'), 'String "01110" was not accepted')
@@ -313,6 +324,48 @@ class TestConcat(unittest.TestCase):
         self.assertFalse(fc.test_input('0100'), 'String "0100" not rejected')
         self.assertFalse(fc.test_input('0111'), 'String "0111" not rejected')
         self.assertFalse(fc.test_input('1111'), 'String "1111" not rejected')
+
+    def testUnion(self):
+        """
+        Define one NFA a that accept all strings in the regular language '00*1'
+        Define a second NFA accepting all string in the regular language '11*0'
+
+        Combine the two NFAs with an or function and test that the new NFA
+        accepts string of the regular language '00*1 or 11*0'
+
+        :return:
+        """
+        fa = self.nfa1
+        fb = self.nfa2
+
+        fc = fa + fb
+
+        self.assertTrue(fc.test_input('01'), 'String "01" not accepted')
+        self.assertTrue(fc.test_input('10'), 'String "10" not accepted')
+        self.assertFalse(fc.test_input('11'), 'String "11" not rejected')
+        self.assertFalse(fc.test_input('00'), 'String "00" not rejected')
+        self.assertFalse(fc.test_input(''), 'String "" not rejected')
+
+    def testStar(self):
+        """
+        Define one NFA a that accept all strings in the regular language '00*1'
+        Define a second NFA accepting all string in the regular language '11*0'
+
+        Combine the two NFAs with an or function and test that the new NFA
+        accepts string of the regular language '00*1 or 11*0'
+
+        :return:
+        """
+        fa = self.nfa1
+
+        fstar = fa.star()
+
+        self.assertTrue(fstar.test_input(''), 'String "" not accepted')
+        self.assertTrue(fstar.test_input('01'), 'String "01" not accepted')
+        self.assertTrue(fstar.test_input('0101'), 'String "0101" not accepted')
+        self.assertTrue(fstar.test_input('01000100001'), 'String "01000100001" not accepted')
+        self.assertFalse(fstar.test_input('00'), 'String "00" not rejected')
+        self.assertFalse(fstar.test_input('10'), 'String "10" not rejected')
 
 
 class TestClosure(unittest.TestCase):
@@ -346,6 +399,79 @@ class TestClosure(unittest.TestCase):
 
         closure = nfa.closure(s0)
         self.assertIn(s0, closure, "Closure start state should be in closure")
+
+class TestAlphaNumericDFA(unittest.TestCase):
+    """Test NFA->DFA conversion"""
+
+    def setUp(self):
+        alphabet = [chr(i) for i in xrange(ord('0'), ord('9')+1)]
+        alphabet += [chr(i) for i in xrange(ord('A'), ord('Z')+1)]
+        alphabet += [chr(i) for i in xrange(ord('a'), ord('z')+1)]
+        alphabet += '+-'
+        self.fa = NFA(alphabet)
+
+    def test_vectors(self):
+        '''
+        Test an NFA that accepts digits with an optional sign.
+
+          sInit -(+)-> sSign
+          sInit -(-)-> sSign
+          sInit -(Epsilon)->  sSign
+
+          sSign -([0-9])-> sDigit
+          sDigit -([0-9])-> sDigit
+
+          sDigit is the accepting state
+        '''
+        nfa = self.fa
+        sInit = nfa.new_state(initial=True)
+        sSign = nfa.new_state()
+        sDigit = nfa.new_state(final=True)
+
+        nfa.new_edge(sInit, '+', sSign)
+        nfa.new_edge(sInit, '-', sSign)
+        nfa.new_edge(sInit, Epsilon, sSign)
+        for s in '0123456789':
+            nfa.new_edge(sSign, s, sDigit)
+            nfa.new_edge(sDigit, s, sDigit)
+
+        dfa = nfa.subset_construct_dfa()
+
+        # Check that no epsilon transition exists
+        eps = dfa.get_edges_on_symbol(Epsilon)
+        self.assertFalse(eps, "DFA has epsilon transitions: {}".format(eps))
+
+        # Check that no state has more than one transition per symbol
+        for p in dfa.get_states():
+            edges = dfa.get_edges_from_state(p)
+            for s, qs in edges.iteritems():
+                self.assertTrue(len(qs) < 2, "DFA state {} has more than one transition on symbol {}".format(p, s))
+
+        vectors = {
+            'accepting': [
+                '123',
+                '0',
+                '+1',
+                '-1',
+                '+321',
+                '-321'],
+            'rejecting': [
+                'ABC',
+                '+-0',
+                '12+21',
+                '-12abc',
+                'ABC-321'
+            ]
+        }
+
+        for v in vectors['accepting']:
+            self.assertTrue(nfa.test_input(v), 'String "{}" was not accepted by nfa as it should'.format(v))
+            self.assertTrue(dfa.test_input(v), 'String "{}" was not accepted by dfa as it should'.format(v))
+
+        for v in vectors['rejecting']:
+            self.assertFalse(nfa.test_input(v), 'String "{}" was not rejected by nfa as it should'.format(v))
+            self.assertFalse(dfa.test_input(v), 'String "{}" was not rejected by dfa as it should'.format(v))
+
 
 if __name__ == '__main__':
     unittest.main()

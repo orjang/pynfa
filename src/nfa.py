@@ -40,7 +40,7 @@ class NFA(object):
         :return: None
         """
         self._alphabet = set(alphabet)
-        self._states = {}  # {state:{symol:set(states)}}
+        self._states = {}  # {state:{symbol:set(states)}}
         self._state_names = {}
         self._finals = set()
         self._initial = None
@@ -225,7 +225,8 @@ class NFA(object):
         edges = {}
         for p, states in self._states.items():
             try:
-                edges[p] = set([q for q in states[s]])
+                if states[s]:
+                    edges[p] = set([q for q in states[s]])
             except KeyError:
                 if s not in self._alphabet:
                     raise NFAInvalidInput("symbol {} not in the defined alphabet".format(s))
@@ -233,6 +234,34 @@ class NFA(object):
                     raise
 
         return edges
+
+    def move(self, s, sym):
+        """
+        Get next state set from state set s over symbol sym
+
+        :param s: starting state set
+        :param sym: input symbol
+        :return: resulting state set
+        """
+        current_states = s
+        processed = set()
+        while processed ^ current_states:
+            for p in list(processed ^ current_states):
+                current_states |= self.delta(p, Epsilon)
+                processed.add(p)
+
+        next_states = set()
+        for p in current_states:
+            next_states |= self.delta(p, Epsilon)
+            next_states |= self.delta(p, sym)
+
+        processed = set()
+        while processed ^ next_states:
+            for p in list(processed ^ next_states):
+                next_states |= self.delta(p, Epsilon)
+                processed.add(p)
+
+        return next_states
 
     def test_input(self, input_sequence):
         """
@@ -246,36 +275,24 @@ class NFA(object):
         if self._initial is None:
             raise NFAException("NFA has no initial state")
 
-        current_states = {self._initial}
-
-        processed = set()
-        while processed ^ current_states:
-            for p in list(processed ^ current_states):
-                current_states |= self.delta(p, Epsilon)
-                processed.add(p)
-
+        current_states = self.closure({self._initial})
         for sym in input_sequence:
-            next_states = set()
-            for p in current_states:
-                next_states |= self.delta(p, Epsilon)
-                next_states |= self.delta(p, sym)
-
-            processed = set()
-            while processed ^ next_states:
-                for p in list(processed ^ next_states):
-                    next_states |= self.delta(p, Epsilon)
-                    processed.add(p)
-            current_states = next_states
-
+            current_states = self.move(current_states, sym)
             if not current_states:
                 return False
 
         return True if current_states & self._finals else False
 
-    def concatenate(self, other):
+    def __or__(self, other):
         """
         Concatenate two NFAs
         A new NFA is returned with the concatenated NFAs, leaving both input NFAs unchanged
+
+        Example:
+          combined_nfa = nfa1 | nfa2
+
+          combined_nfa will match any input string that is a matching
+          string from nfa1 concatenated with a matching string from nfa2
 
         :param other: Other NFA to be concatenated after this one
         :return: Concatenated new NFA
@@ -322,20 +339,168 @@ class NFA(object):
 
         return concat
 
+    def __add__(self, other):
+        """
+        Combine two NFAs to a new NFA matching anything that either input NFA matches.
+
+        Example:
+          combined_nfa = nfa1 + nfa2
+
+          combined_nfa will match any input string that is a matching
+          string in either nfa1 or nfa2
+
+        :param other: Other NFA to be combined with this one
+        :return: Combined new NFA
+        """
+        concat = NFA(self._alphabet)
+
+        sid_first_to_new = {}
+        sid_new_to_first = {}
+        sid_second_to_new = {}
+        sid_new_to_second = {}
+
+        # Add all states from first NFA to new NFA
+        for p, name in self.get_states().items():
+            sid = concat.new_state(name=name)
+            sid_first_to_new[p] = sid
+            sid_new_to_first[sid] = p
+
+        # Add all states from second NFA
+        for p, name in other.get_states().items():
+            sid = concat.new_state(name=name)
+            sid_second_to_new[p] = sid
+            sid_new_to_second[sid] = p
+
+        # Add all transitions from first NFA
+        for p in self.get_states():
+            for s, states in self.get_edges_from_state(p).items():
+                concat.new_edge_set(sid_first_to_new[p], s, set([sid_first_to_new[q] for q in states]))
+
+        # Add all transitions from second NFA
+        for p in other.get_states():
+            for s, states in other.get_edges_from_state(p).items():
+                concat.new_edge_set(sid_second_to_new[p], s, set([sid_second_to_new[q] for q in states]))
+
+        # Add new start state
+        start = concat.new_state(initial=True)
+
+        # Add new final state
+        final = concat.new_state(final=True)
+
+        # Add epsilon transitions from new start to both old start states
+        concat.new_edge(start, Epsilon, sid_first_to_new[self.get_initial()])
+        concat.new_edge(start, Epsilon, sid_second_to_new[other.get_initial()])
+
+        # Connect all final states in first NFA to new final state
+        for p in self.get_finals():
+            concat.new_edge(sid_first_to_new[p], Epsilon, final)
+
+        # Connect all final states in second NFA to new final state
+        for p in other.get_finals():
+            concat.new_edge(sid_second_to_new[p], Epsilon, final)
+
+        return concat
+
+    def star(self):
+        """
+        Create a new NFA matching zero or more strings from input NFA
+
+        Example:
+          new_nfa = nfa1.star()
+
+          new_nfa matches any matching string from nfa1 zero or more times
+
+        :return: new NFA
+        """
+        new_nfa = NFA(self._alphabet)
+
+        sid_this_to_new = {}
+
+        # Add all states from this NFA to new NFA
+        for p, name in self.get_states().items():
+            sid = new_nfa.new_state(name=name)
+            sid_this_to_new[p] = sid
+
+        # Add all transitions from this NFA
+        for p in self.get_states():
+            for s, states in self.get_edges_from_state(p).items():
+                new_nfa.new_edge_set(sid_this_to_new[p], s, set([sid_this_to_new[q] for q in states]))
+
+        # Add new start state
+        start = new_nfa.new_state(initial=True)
+
+        # Add new final state
+        final = new_nfa.new_state(final=True)
+
+        # Add epsilon transitions from new start to old start state
+        new_nfa.new_edge(start, Epsilon, sid_this_to_new[self.get_initial()])
+
+        # Add epsilon transition from new start state to new final state
+        new_nfa.new_edge(start, Epsilon, final)
+
+        # Add epsilon transition from all old final states to old start state and to new final state
+        for p in self.get_finals():
+            s = sid_this_to_new[p]
+            new_nfa.new_edge(s, Epsilon, sid_this_to_new[self.get_initial()])
+            new_nfa.new_edge(s, Epsilon, final)
+
+        return new_nfa
+
     def closure(self, p):
         """
-        Epsilon closure for a state
+        Espilon closure for a state or set of states over a symbol
 
-        Return the set of states reachable from state p without
-        consuming any input symbols, ie, using only epsilon transitions
+        Return the set of states reachable from state p without consuming
+        any input symbols.
 
         :param p: State id to get closure of
         :return: Set of states that is the closure of p
         """
-        closure_states = {p}
+        if not isinstance(p, set):
+            closure_states = {p}
+        else:
+            closure_states = p
         processed = set()
         while closure_states ^ processed:
             for p in list(closure_states ^ processed):
                 closure_states |= self.get_edges_from_state(p)[Epsilon]
                 processed.add(p)
+
         return closure_states
+
+    def subset_construct_dfa(self):
+        """
+        Convert an NFA to the equivalent DFA by subset construction.
+        It is still an instance of class NFA, but it has only deterministic properties.
+        I.e, at most one edge on each symbol from any state, and no epsilon transitions.
+
+        :return: new equivalent DFA instance
+        """
+        def subset_str(subs):
+            return "{{{}}}".format(",".join([str(i) for i in subs]))
+
+        dfa = NFA(self._alphabet - {Epsilon})
+        subsets = {}
+        unmarked = []
+        subset = self.closure(self._initial)
+        sid = dfa.new_state(initial=True, name=','.join([str(sid) for sid in subset]))
+        subsets[subset_str(subset)] = sid
+        unmarked.append(subset)
+
+        while unmarked:
+            for t in list(unmarked):
+                t_sid = subsets[subset_str(t)]
+                unmarked.remove(t)
+                for sym in self._alphabet - {Epsilon}:
+                    subset = self.closure(self.move(t, sym))
+                    if subset_str(subset) not in subsets:
+                        sid = dfa.new_state(name=subset_str(subset))
+                        if subset & self._finals:
+                            dfa.set_as_final_state(sid)
+                        subsets[subset_str(subset)] = sid
+                        unmarked.append(subset)
+                        dfa.new_edge(t_sid, sym, sid)
+                    else:
+                        dfa.new_edge(t_sid, sym, subsets[subset_str(subset)])
+
+        return dfa
