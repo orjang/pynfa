@@ -169,9 +169,9 @@ class TestSimpleDFA(unittest.TestCase):
 
 class TestAlphanumericDFA(unittest.TestCase):
     def setUp(self):
-        alphabet = [chr(i) for i in xrange(ord('0'), ord('9')+1)]
-        alphabet += [chr(i) for i in xrange(ord('A'), ord('Z')+1)]
-        alphabet += [chr(i) for i in xrange(ord('a'), ord('z')+1)]
+        alphabet = [chr(i) for i in range(ord('0'), ord('9')+1)]
+        alphabet += [chr(i) for i in range(ord('A'), ord('Z')+1)]
+        alphabet += [chr(i) for i in range(ord('a'), ord('z')+1)]
         self.fa = NFA(alphabet)
 
     def test_vectors(self):
@@ -217,9 +217,9 @@ class TestAlphanumericDFA(unittest.TestCase):
 
 class TestAlphaNumericNFA(unittest.TestCase):
     def setUp(self):
-        alphabet = [chr(i) for i in xrange(ord('0'), ord('9')+1)]
-        alphabet += [chr(i) for i in xrange(ord('A'), ord('Z')+1)]
-        alphabet += [chr(i) for i in xrange(ord('a'), ord('z')+1)]
+        alphabet = [chr(i) for i in range(ord('0'), ord('9')+1)]
+        alphabet += [chr(i) for i in range(ord('A'), ord('Z')+1)]
+        alphabet += [chr(i) for i in range(ord('a'), ord('z')+1)]
         alphabet += '+-'
         self.fa = NFA(alphabet)
 
@@ -404,9 +404,9 @@ class TestAlphaNumericDFA(unittest.TestCase):
     """Test NFA->DFA conversion"""
 
     def setUp(self):
-        alphabet = [chr(i) for i in xrange(ord('0'), ord('9')+1)]
-        alphabet += [chr(i) for i in xrange(ord('A'), ord('Z')+1)]
-        alphabet += [chr(i) for i in xrange(ord('a'), ord('z')+1)]
+        alphabet = [chr(i) for i in range(ord('0'), ord('9')+1)]
+        alphabet += [chr(i) for i in range(ord('A'), ord('Z')+1)]
+        alphabet += [chr(i) for i in range(ord('a'), ord('z')+1)]
         alphabet += '+-'
         self.fa = NFA(alphabet)
 
@@ -444,7 +444,7 @@ class TestAlphaNumericDFA(unittest.TestCase):
         # Check that no state has more than one transition per symbol
         for p in dfa.get_states():
             edges = dfa.get_edges_from_state(p)
-            for s, qs in edges.iteritems():
+            for s, qs in edges.items():
                 self.assertTrue(len(qs) < 2, "DFA state {} has more than one transition on symbol {}".format(p, s))
 
         vectors = {
