@@ -349,10 +349,9 @@ class TestCombinations(unittest.TestCase):
     def testStar(self):
         """
         Define one NFA a that accept all strings in the regular language '00*1'
-        Define a second NFA accepting all string in the regular language '11*0'
 
-        Combine the two NFAs with an or function and test that the new NFA
-        accepts string of the regular language '00*1 or 11*0'
+        Make new NFA from defined as the kleene star operator of the original NFA.
+        Make sure that the new NFA accepts string of the regular language '(00*1)*'
 
         :return:
         """
