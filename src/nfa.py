@@ -252,7 +252,6 @@ class NFA(object):
 
         next_states = set()
         for p in current_states:
-            next_states |= self.delta(p, Epsilon)
             next_states |= self.delta(p, sym)
 
         processed = set()
@@ -504,3 +503,24 @@ class NFA(object):
                         dfa.new_edge(t_sid, sym, subsets[subset_str(subset)])
 
         return dfa
+
+    def build_from_string(self, string):
+        """Add transitions to this NFA that matches a simple string
+        of symbols.
+
+        Example:
+           nfa = NFA(alphabet)
+           nfa.build_from_string('abcde')
+
+           make nfa accept the string "abcde"
+
+        :param string: Input string of symbols to match
+        """
+        start = self.new_state(initial=True)
+        current = start
+        for c in string:
+            new = self.new_state(name=c)
+            self.new_edge(current, c, new)
+            current = new
+        final = self.new_state(final=True)
+        self.new_edge(current, Epsilon, final)

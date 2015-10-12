@@ -25,7 +25,7 @@ from nfa import NFA, Epsilon, NFAException
 
 class TestSimpleDFA(unittest.TestCase):
     def setUp(self):
-        self.fa = NFA('01')
+        self.fa = NFA('012')
 
     def test_instantiation(self):
         self.assertFalse(self.fa.no_of_states, 'States not empty at start')
@@ -270,6 +270,25 @@ class TestAlphaNumericNFA(unittest.TestCase):
         for v in vectors['rejecting']:
             self.assertFalse(fa.test_input(v), 'String "{}" was not rejected as it should'.format(v))
 
+    def test_partial_match(self):
+        """Test that a string with a partial match is not accepted.
+        Example:
+           nfa accepting string "abc" should not accept any string "abc.+"
+        """
+        fa = self.fa
+        start = fa.new_state(initial=True)
+        sa = fa.new_state(name='a')
+        sb = fa.new_state(name='b')
+        sc = fa.new_state(name='c')
+        final = fa.new_state(final=True)
+        fa.new_edge(start, 'a', sa)
+        fa.new_edge(sa, 'b', sb)
+        fa.new_edge(sb, 'c', sc)
+        fa.new_edge(sc, Epsilon, final)
+        self.assertTrue(fa.test_input('abc'), 'String "abc" not accepted as it should')
+        self.assertFalse(fa.test_input(''), 'String "" not rejected as it should')
+        self.assertFalse(fa.test_input('abcd'), 'String "abcd" not rejected as it should')
+
 
 class TestCombinations(unittest.TestCase):
     def setUp(self):
@@ -471,6 +490,24 @@ class TestAlphaNumericDFA(unittest.TestCase):
             self.assertFalse(nfa.test_input(v), 'String "{}" was not rejected by nfa as it should'.format(v))
             self.assertFalse(dfa.test_input(v), 'String "{}" was not rejected by dfa as it should'.format(v))
 
+
+class TestStringNFA(unittest.TestCase):
+    """Test construction of NFA from a simple string of symbols"""
+
+    def setUp(self):
+        alphabet = [chr(i) for i in range(ord('0'), ord('9')+1)]
+        alphabet += [chr(i) for i in range(ord('A'), ord('Z')+1)]
+        alphabet += [chr(i) for i in range(ord('a'), ord('z')+1)]
+        alphabet += '+-'
+        self.nfa = NFA(alphabet)
+
+    def testSimpleString(self):
+        nfa = self.nfa
+        nfa.build_from_string('abcde')
+        self.assertTrue(nfa.test_input('abcde'), 'String "abcde"  was not accepted by the nfa as it should')
+        self.assertFalse(nfa.test_input('abcd'), 'String "abcd" was not rejected as it should')
+        self.assertFalse(nfa.test_input('abcdef'), 'String "abcdef" was not rejected as it should')
+        self.assertFalse(nfa.test_input(''), 'String "" was not rejected as it should')
 
 if __name__ == '__main__':
     unittest.main()
